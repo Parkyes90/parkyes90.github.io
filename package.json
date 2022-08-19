@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "hexo-component-inferno": "^1.2.0",
-    "inferno": "^8.0.2",
+    "inferno": "^8.0.3",
     "inferno-create-element": "^8.0.2"
   }
 }
