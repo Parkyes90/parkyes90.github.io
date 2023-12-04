@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "bulma-stylus": "0.9.1",
-    "eslint": "^8.54.0",
+    "eslint": "^8.55.0",
     "eslint-config-hexo": "^5.0.0",
     "eslint-plugin-json": "^3.0.0",
     "eslint-plugin-react": "^7.33.2",
