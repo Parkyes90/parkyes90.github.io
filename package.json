@@ -15,7 +15,7 @@
     "bulma-stylus": "0.9.1",
     "eslint": "^9.3.0",
     "eslint-config-hexo": "^5.0.0",
-    "eslint-plugin-json": "^3.0.0",
+    "eslint-plugin-json": "^4.0.0",
     "eslint-plugin-react": "^7.34.1",
     "hexo": "^7.2.0",
     "hexo-deployer-git": "^4.0.0",
