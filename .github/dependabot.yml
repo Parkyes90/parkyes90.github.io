@@ -1,0 +1,50 @@
+version: 2
+
+updates:
+  # npm 의존성: 매주 한 번, 묶어서 PR을 올린다.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    # 막 올라온 버전은 며칠 지켜본 뒤에 받는다.
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: build
+      include: scope
+    ignore:
+      # @astrojs/check와 typescript-eslint가 아직 TypeScript 7(네이티브 컴파일러)을 지원하지 않는다.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # 타입 정의는 .nvmrc의 Node 메이저 버전에 맞춰 둔다.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+    groups:
+      # 마이너·패치 업데이트는 전부 PR 하나로 모은다.
+      minor-and-patch:
+        update-types: [minor, patch]
+      # 메이저 업데이트는 따로 모아서 직접 확인한다.
+      major:
+        update-types: [major]
+
+  # 워크플로에서 쓰는 액션: SHA로 고정해 두고 Dependabot이 갱신한다.
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/setup
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Asia/Seoul
+    cooldown:
+      default-days: 5
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']

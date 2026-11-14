@@ -1,0 +1,20 @@
+name: Setup
+description: pnpm과 Node.js를 설치하고 lockfile 그대로 의존성을 내려받는다.
+
+runs:
+  using: composite
+  steps:
+    # pnpm 버전은 package.json의 packageManager 필드를 따른다.
+    - name: Install pnpm
+      uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+    # Node 버전은 .nvmrc를 따르고, pnpm 저장소를 캐시한다.
+    - name: Install Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version-file: .nvmrc
+        cache: pnpm
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

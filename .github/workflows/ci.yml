@@ -1,0 +1,127 @@
+name: CI/CD
+
+# PR에서는 검사만 하고, master에 올라가면 같은 검사를 통과한 결과물을 GitHub Pages에 배포한다.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # 매주 월요일 12:00 KST. Dependabot 자동 병합은 push 이벤트를 만들지 않아서,
+    # 그렇게 들어온 변경은 이 정기 실행 때 master 기준으로 다시 빌드해 배포한다.
+    - cron: '0 3 * * 1'
+
+# 기본은 읽기 전용. 배포 job만 필요한 권한을 따로 받는다.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # PR은 새 커밋이 오면 이전 실행을 취소한다. 배포 중인 실행은 끊지 않고 끝까지 둔다.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Format · Lint · Types
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Check formatting
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Type-check
+        run: pnpm check
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Build site and search index
+        run: pnpm build
+      - name: Check internal links
+        run: pnpm check:links
+
+      # PR: Lighthouse job이 받아서 쓸 빌드 결과
+      - name: Upload build for Lighthouse
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site
+          path: dist
+          retention-days: 3
+
+      # master: 배포 job이 받아서 쓸 Pages 아티팩트
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  lighthouse:
+    name: Lighthouse
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site
+          path: dist
+      # 접근성, 검색 노출, 모범 사례 점수가 기준 아래로 떨어지면 실패한다. 기준은 lighthouserc.cjs에 있다.
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@3e7e23fb74242897f95c0ba9cabad3d0227b9b18 # 12.6.2
+        with:
+          configPath: ./lighthouserc.cjs
+          uploadArtifacts: true
+
+  # 브랜치 보호 규칙에서 "필수 검사"로 지정할 단일 결과.
+  # 위 job 중 하나라도 실패하거나 취소되면 실패하고, 조건에 따라 건너뛴 job은 통과로 본다.
+  ci:
+    name: CI
+    if: always()
+    needs: [check, build, lighthouse]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify all checks passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            if [[ "$result" != "success" && "$result" != "skipped" ]]; then
+              exit 1
+            fi
+          done
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

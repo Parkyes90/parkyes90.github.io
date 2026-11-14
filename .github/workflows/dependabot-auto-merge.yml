@@ -1,0 +1,31 @@
+name: Dependabot auto-merge
+
+# Dependabot이 올린 마이너·패치 업데이트 PR은 필수 검사(CI)가 통과하면 자동으로 squash 병합한다.
+# 메이저 업데이트는 건드리지 않으므로 직접 확인하고 병합해야 한다.
+#
+# 저장소 설정 두 가지가 켜져 있어야 동작한다.
+#   1. Settings > General > Allow auto-merge
+#   2. master 브랜치에 "CI" 검사를 필수로 요구하는 ruleset
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Enable auto-merge
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch update metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      - name: Enable auto-merge for minor and patch updates
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge --auto --squash "$PR_URL"
