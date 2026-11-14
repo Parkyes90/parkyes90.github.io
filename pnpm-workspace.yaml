@@ -1,0 +1,7 @@
+# 상위 패키지가 버전을 고정해 둬서 보안 수정본을 받지 못하는 간접 의존성만 올려 쓴다.
+# 상위 패키지가 수정본을 받아들이면 해당 줄을 지운다.
+overrides:
+  # satori가 0.7.3으로 고정 (잘못된 ZIP을 풀 때 무한 루프)
+  fflate@0.7.3: 0.7.5
+  # @tailwindcss/typography가 6.0.10으로 고정 (선택자 파싱 시 CPU 과다 사용)
+  postcss-selector-parser@6.0.10: 6.1.5
