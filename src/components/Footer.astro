@@ -1,0 +1,27 @@
+---
+import { SITE } from '@/site.config';
+
+const year = new Date().getFullYear();
+const links = [
+  { href: '/rss.xml', label: 'RSS' },
+  { href: SITE.links.github, label: 'GitHub' },
+  { href: '/sitemap-index.xml', label: 'Sitemap' },
+];
+---
+
+<footer class="border-border mt-24 border-t">
+  <div class="container-page meta flex flex-col gap-3 py-8 sm:flex-row sm:items-center sm:justify-between">
+    <p>
+      © {year} {SITE.author}
+    </p>
+    <ul class="flex items-center gap-5">
+      {links.map(({ href, label }) => (
+        <li>
+          <a href={href} class="hover:text-fg transition-colors">
+            {label}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+</footer>

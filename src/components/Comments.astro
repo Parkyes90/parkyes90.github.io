@@ -1,0 +1,62 @@
+---
+import { SITE } from '@/site.config';
+
+const { repo, repoId, category, categoryId } = SITE.giscus;
+const enabled = Boolean(repo && repoId && category && categoryId);
+---
+
+{enabled && (
+  <section class="border-border mt-16 border-t pt-10" aria-label="댓글">
+    <div
+      data-giscus
+      data-repo={repo}
+      data-repo-id={repoId}
+      data-category={category}
+      data-category-id={categoryId}
+    />
+  </section>
+)}
+
+<script>
+  const ORIGIN = 'https://giscus.app';
+
+  function mount() {
+    const host = document.querySelector<HTMLElement>('[data-giscus]');
+    if (!host || host.childElementCount > 0) return;
+
+    const script = document.createElement('script');
+    const attributes: Record<string, string> = {
+      repo: host.dataset.repo ?? '',
+      'repo-id': host.dataset.repoId ?? '',
+      category: host.dataset.category ?? '',
+      'category-id': host.dataset.categoryId ?? '',
+      mapping: 'pathname',
+      strict: '1',
+      'reactions-enabled': '1',
+      'emit-metadata': '0',
+      'input-position': 'top',
+      theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+      lang: document.documentElement.lang || 'ko',
+      loading: 'lazy',
+    };
+    for (const [key, value] of Object.entries(attributes)) {
+      script.setAttribute(`data-${key}`, value);
+    }
+    script.src = `${ORIGIN}/client.js`;
+    script.crossOrigin = 'anonymous';
+    script.async = true;
+    host.append(script);
+  }
+
+  // 다른 페이지에서 넘어온 경우 page-load 이벤트를 놓칠 수 있어 로드 직후에도 한 번 실행한다.
+  mount();
+  document.addEventListener('astro:page-load', mount);
+
+  // 테마를 바꾸면 이미 떠 있는 댓글 창도 같이 바꾼다.
+  document.addEventListener('themechange', (event) => {
+    const theme = (event as CustomEvent<string>).detail;
+    document
+      .querySelector<HTMLIFrameElement>('iframe.giscus-frame')
+      ?.contentWindow?.postMessage({ giscus: { setConfig: { theme } } }, ORIGIN);
+  });
+</script>

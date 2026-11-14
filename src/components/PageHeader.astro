@@ -1,0 +1,24 @@
+---
+interface Props {
+  title: string;
+  /** 제목 위에 작게 붙는 분류 라벨 */
+  eyebrow?: string;
+  /** 제목 옆에 붙는 개수 */
+  count?: number;
+}
+
+const { title, eyebrow, count } = Astro.props;
+---
+
+<header class="container-page pt-14 pb-10 sm:pt-20">
+  {eyebrow && <p class="meta mb-3">{eyebrow}</p>}
+  <h1 class="text-fg flex items-baseline gap-3 text-3xl font-bold tracking-[-0.03em]">
+    {title}
+    {count !== undefined && <span class="meta text-base font-normal">{count}</span>}
+  </h1>
+  {Astro.slots.has('default') && (
+    <p class="text-muted mt-3 leading-relaxed">
+      <slot />
+    </p>
+  )}
+</header>

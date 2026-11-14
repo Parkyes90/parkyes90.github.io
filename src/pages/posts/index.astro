@@ -1,0 +1,28 @@
+---
+import EmptyState from '@/components/EmptyState.astro';
+import PageHeader from '@/components/PageHeader.astro';
+import PostList from '@/components/PostList.astro';
+import Base from '@/layouts/Base.astro';
+import { getPosts, groupByYear } from '@/lib/posts';
+
+const posts = await getPosts();
+const groups = groupByYear(posts);
+---
+
+<Base title="글" description="지금까지 쓴 글을 연도별로 모아 둔 목록입니다.">
+  <PageHeader title="글" count={posts.length} />
+
+  <div class="container-page">
+    {groups.map(({ year, posts }) => (
+      <section class="mt-10 first:mt-0" aria-labelledby={`year-${year}`}>
+        <h2 id={`year-${year}`} class="meta border-border border-b pb-3">
+          {year}
+        </h2>
+        <PostList posts={posts} />
+      </section>
+    ))}
+    {posts.length === 0 && (
+      <EmptyState title="아직 올라온 글이 없어요">첫 글을 준비하고 있어요.</EmptyState>
+    )}
+  </div>
+</Base>

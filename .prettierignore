@@ -1,0 +1,7 @@
+dist/
+.astro/
+node_modules/
+pnpm-lock.yaml
+
+# 글 본문은 작성자가 쓴 줄바꿈과 표 모양을 그대로 둔다.
+src/content/

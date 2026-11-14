@@ -1,0 +1,62 @@
+---
+import '@/styles/global.css';
+import { ClientRouter } from 'astro:transitions';
+import type { ComponentProps } from 'astro/types';
+import Footer from '@/components/Footer.astro';
+import Head from '@/components/Head.astro';
+import Header from '@/components/Header.astro';
+import Search from '@/components/Search.astro';
+import { SITE } from '@/site.config';
+
+type Props = ComponentProps<typeof Head>;
+---
+
+<!doctype html>
+<html lang={SITE.lang} data-theme="light">
+  <head>
+    <Head {...Astro.props} />
+    <!--
+      첫 페인트 전에 테마를 정해 깜빡임을 막는다.
+      페이지 전환 때는 새 문서가 화면에 붙기 전에 같은 값을 다시 적용한다.
+    -->
+    <script is:inline>
+      (() => {
+        const stored = () => {
+          try {
+            return localStorage.getItem('theme');
+          } catch {
+            return null;
+          }
+        };
+        const system = matchMedia('(prefers-color-scheme: dark)');
+        const resolve = () => stored() ?? (system.matches ? 'dark' : 'light');
+        const apply = (doc) => {
+          const theme = resolve();
+          doc.documentElement.dataset.theme = theme;
+          doc
+            .querySelector('meta[name="theme-color"]')
+            ?.setAttribute('content', theme === 'dark' ? '#0c0d12' : '#fcfcfd');
+        };
+        apply(document);
+        document.addEventListener('astro:before-swap', (event) => apply(event.newDocument));
+        system.addEventListener('change', () => apply(document));
+        window.__applyTheme = () => apply(document);
+      })();
+    </script>
+    <ClientRouter />
+  </head>
+  <body class="flex min-h-dvh flex-col">
+    <a
+      href="#main"
+      class="bg-accent text-bg sr-only z-100 rounded-md px-3 py-2 text-sm font-medium focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+    >
+      본문으로 건너뛰기
+    </a>
+    <Header />
+    <main id="main" class="flex-1">
+      <slot />
+    </main>
+    <Footer />
+    <Search />
+  </body>
+</html>

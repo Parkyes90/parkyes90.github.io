@@ -1,0 +1,40 @@
+---
+import { type Post, formatDate, postUrl } from '@/lib/posts';
+
+interface Props {
+  posts: Post[];
+  /** 글 제목에 쓸 제목 단계. 목록 바로 위 제목보다 한 단계 아래로 맞춘다. */
+  level?: 2 | 3;
+}
+
+const { posts, level = 3 } = Astro.props;
+const Heading = `h${level}` as const;
+---
+
+<ul class="divide-border divide-y">
+  {posts.map((post) => (
+    <li>
+      <a
+        href={postUrl(post)}
+        class="group grid gap-x-6 gap-y-1 py-5 sm:grid-cols-[6.5rem_1fr] sm:py-6"
+      >
+        <time datetime={post.data.pubDate.toISOString()} class="meta sm:pt-1">
+          {formatDate(post.data.pubDate)}
+        </time>
+        <div class="min-w-0">
+          <Heading class="text-fg group-hover:text-accent text-[1.0625rem] leading-snug font-semibold tracking-tight transition-colors">
+            {post.data.title}
+            {post.data.draft && (
+              <span class="meta border-border ml-2 rounded border px-1.5 py-0.5 align-middle">
+                draft
+              </span>
+            )}
+          </Heading>
+          <p class="text-muted mt-1.5 line-clamp-2 text-[0.9375rem] leading-relaxed">
+            {post.data.description}
+          </p>
+        </div>
+      </a>
+    </li>
+  ))}
+</ul>

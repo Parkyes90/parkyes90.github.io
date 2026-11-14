@@ -1,0 +1,202 @@
+---
+import type { GetStaticPaths } from 'astro';
+import { render } from 'astro:content';
+import Comments from '@/components/Comments.astro';
+import TagChip from '@/components/TagChip.astro';
+import Toc from '@/components/Toc.astro';
+import Base from '@/layouts/Base.astro';
+import { type Post, formatDate, getPosts, postUrl, readingMinutes } from '@/lib/posts';
+
+export const getStaticPaths = (async () => {
+  const posts = await getPosts();
+  return posts.map((post, index) => ({
+    params: { slug: post.id },
+    // 목록이 최신순이라 앞쪽이 더 새 글이다.
+    props: { post, newer: posts[index - 1], older: posts[index + 1] },
+  }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  post: Post;
+  newer?: Post;
+  older?: Post;
+}
+
+const { post, newer, older } = Astro.props;
+const { title, description, pubDate, updatedDate, tags, draft } = post.data;
+const { Content, headings } = await render(post);
+
+// 각주 영역의 숨은 제목(footnote-label)은 목차에서 뺀다.
+const toc = headings.filter(
+  ({ depth, slug }) => (depth === 2 || depth === 3) && slug !== 'footnote-label',
+);
+const showToc = toc.length >= 2;
+const neighbors = [
+  { label: '이전 글', post: older, align: 'text-left' },
+  { label: '다음 글', post: newer, align: 'sm:text-right' },
+];
+---
+
+<Base
+  title={title}
+  description={description}
+  image={`/og/${post.id}.png`}
+  article={{ pubDate, updatedDate, tags }}
+  noindex={draft}
+>
+  <div class="reading-progress" aria-hidden="true"></div>
+
+  <div class="xl:grid xl:grid-cols-[1fr_minmax(0,46rem)_1fr]">
+    <article class="container-page pt-14 sm:pt-20 xl:col-start-2" data-pagefind-body>
+      <header class="mb-10">
+        <div class="meta flex flex-wrap items-center gap-x-2.5 gap-y-1" data-pagefind-ignore>
+          <time datetime={pubDate.toISOString()}>{formatDate(pubDate)}</time>
+          <span aria-hidden="true">·</span>
+          <span>{readingMinutes(post.body)}분 읽기</span>
+          {updatedDate && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>
+                수정 <time datetime={updatedDate.toISOString()}>{formatDate(updatedDate)}</time>
+              </span>
+            </>
+          )}
+          {draft && <span class="border-border rounded border px-1.5 py-0.5">draft</span>}
+        </div>
+        <h1 class="text-fg mt-4 text-[2rem] leading-[1.25] font-bold tracking-[-0.035em] text-balance sm:text-[2.5rem]">
+          {title}
+        </h1>
+        <p class="text-muted mt-4 text-lg leading-relaxed">{description}</p>
+        {tags.length > 0 && (
+          <ul class="mt-6 flex flex-wrap gap-2" data-pagefind-ignore>
+            {tags.map((tag) => (
+              <li>
+                <TagChip name={tag} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </header>
+
+      {showToc && (
+        <details
+          class="border-border bg-surface mb-10 rounded-xl border px-4 py-3 xl:hidden"
+          data-pagefind-ignore
+        >
+          <summary class="meta cursor-pointer select-none">목차</summary>
+          <nav aria-label="목차" class="mt-3 mb-1">
+            <Toc headings={toc} />
+          </nav>
+        </details>
+      )}
+
+      <div class="prose" data-post-content>
+        <Content />
+      </div>
+
+      {(older || newer) && (
+        <nav
+          aria-label="이전 글과 다음 글"
+          class="border-border mt-16 grid gap-4 border-t pt-8 sm:grid-cols-2"
+          data-pagefind-ignore
+        >
+          {neighbors.map(({ label, post, align }) =>
+            post ? (
+              <a
+                href={postUrl(post)}
+                class:list={[
+                  'group border-border hover:border-accent rounded-xl border p-4 transition-colors',
+                  align,
+                ]}
+              >
+                <span class="meta block">{label}</span>
+                <span class="text-fg group-hover:text-accent mt-1.5 block leading-snug font-medium transition-colors">
+                  {post.data.title}
+                </span>
+              </a>
+            ) : (
+              <span class="hidden sm:block" />
+            ),
+          )}
+        </nav>
+      )}
+
+      <Comments />
+    </article>
+
+    {showToc && (
+      <aside class="hidden pt-20 pl-4 xl:col-start-3 xl:block">
+        <nav
+          aria-label="목차"
+          class="sticky top-24 max-h-[calc(100dvh-8rem)] w-60 overflow-y-auto pb-4"
+        >
+          <p class="meta mb-3">목차</p>
+          <Toc headings={toc} />
+        </nav>
+      </aside>
+    )}
+  </div>
+</Base>
+
+<script>
+  let headings: HTMLElement[] = [];
+  let links: HTMLAnchorElement[] = [];
+
+  /** 화면 상단을 지난 마지막 제목을 현재 위치로 보고 목차에 표시한다. */
+  function highlight() {
+    let current: string | undefined;
+    for (const heading of headings) {
+      if (heading.getBoundingClientRect().top > 112) break;
+      current = heading.id;
+    }
+    // 마지막 섹션은 짧으면 상단까지 올라오지 못하므로, 끝까지 내렸을 때는 마지막 제목으로 본다.
+    const atBottom =
+      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+    if (atBottom && window.scrollY > 0) current = headings.at(-1)?.id;
+    for (const link of links) {
+      link.toggleAttribute('data-active', link.getAttribute('href') === `#${current}`);
+    }
+  }
+
+  function setup() {
+    const content = document.querySelector('[data-post-content]');
+    // 각주 영역의 숨은 제목은 목차에 없으므로 제외한다.
+    headings = content
+      ? [...content.querySelectorAll<HTMLElement>('h2[id], h3[id]')].filter(
+          (heading) => heading.id !== 'footnote-label',
+        )
+      : [];
+    links = [...document.querySelectorAll<HTMLAnchorElement>('[data-toc-link]')];
+
+    // 제목에 마우스를 올리면 보이는 `#` 링크를 붙인다.
+    for (const heading of headings) {
+      if (heading.querySelector('.heading-anchor')) continue;
+      const anchor = document.createElement('a');
+      anchor.className = 'heading-anchor';
+      anchor.href = `#${heading.id}`;
+      anchor.setAttribute('aria-label', `"${heading.textContent?.trim()}" 위치 링크`);
+      anchor.textContent = '#';
+      heading.append(anchor);
+    }
+
+    highlight();
+  }
+
+  let ticking = false;
+  document.addEventListener(
+    'scroll',
+    () => {
+      if (ticking || links.length === 0) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        highlight();
+      });
+    },
+    { passive: true },
+  );
+  // 다른 페이지에서 넘어온 경우 이 스크립트가 page-load 이벤트보다 늦게 실행될 수 있어서,
+  // 로드 직후에도 한 번 실행한다. setup은 여러 번 불려도 안전하다.
+  setup();
+  document.addEventListener('astro:page-load', setup);
+</script>

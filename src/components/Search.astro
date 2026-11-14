@@ -1,0 +1,189 @@
+---
+---
+
+<dialog
+  id="search-dialog"
+  aria-label="글 검색"
+  class="bg-bg text-fg-soft border-border backdrop:bg-fg/25 mx-auto mt-[12vh] w-[calc(100%-2rem)] max-w-xl rounded-xl border p-0 shadow-2xl backdrop:backdrop-blur-sm"
+>
+  <div class="border-border flex items-center gap-3 border-b px-4">
+    <svg
+      class="text-muted size-4 shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="7"></circle>
+      <path d="m20 20-3.5-3.5"></path>
+    </svg>
+    <input
+      id="search-input"
+      type="search"
+      placeholder="글 검색"
+      autocomplete="off"
+      spellcheck="false"
+      aria-label="검색어"
+      aria-controls="search-results"
+      class="text-fg placeholder:text-muted h-12 min-w-0 flex-1 bg-transparent text-[0.9375rem] outline-none [&::-webkit-search-cancel-button]:hidden"
+    />
+    <kbd class="meta border-border rounded border px-1.5 text-[0.6875rem] leading-5">esc</kbd>
+  </div>
+  <p id="search-status" role="status" class="text-muted px-4 py-6 text-center text-sm"></p>
+  <ul id="search-results" class="max-h-[55vh] overflow-y-auto p-2 empty:hidden"></ul>
+</dialog>
+
+<script>
+  interface PagefindResult {
+    url: string;
+    excerpt: string;
+    meta: { title?: string };
+  }
+
+  interface Pagefind {
+    options(options: Record<string, unknown>): Promise<void>;
+    init(): void;
+    debouncedSearch(
+      query: string,
+      options?: Record<string, unknown>,
+      debounceMs?: number,
+    ): Promise<{ results: { data(): Promise<PagefindResult> }[] } | null>;
+  }
+
+  const MESSAGES = {
+    idle: '제목이나 본문에 들어 있는 단어로 찾아보세요.',
+    empty: (query: string) => `'${query}'에 맞는 글이 없어요.`,
+    unavailable: '검색 색인은 빌드할 때 만들어져요. pnpm build 후 pnpm preview에서 확인하세요.',
+  };
+
+  /** undefined: 아직 불러오지 않음, null: 색인이 없음(개발 서버 등) */
+  let pagefind: Pagefind | null | undefined;
+
+  async function loadPagefind(): Promise<Pagefind | null> {
+    if (pagefind !== undefined) return pagefind;
+    try {
+      // 빌드 뒤에 생기는 파일이라 번들러가 해석하지 않도록 경로를 변수로 넘긴다.
+      const path = '/pagefind/pagefind.js';
+      const module: Pagefind = await import(/* @vite-ignore */ path);
+      await module.options({ excerptLength: 22 });
+      module.init();
+      pagefind = module;
+    } catch {
+      pagefind = null;
+    }
+    return pagefind;
+  }
+
+  // 페이지 전환으로 DOM이 바뀌어도 동작하도록 요소는 쓸 때마다 다시 찾는다.
+  const dialog = () => document.querySelector<HTMLDialogElement>('#search-dialog');
+  const input = () => document.querySelector<HTMLInputElement>('#search-input');
+  const status = () => document.querySelector<HTMLElement>('#search-status');
+  const list = () => document.querySelector<HTMLElement>('#search-results');
+
+  function setStatus(message: string) {
+    const element = status();
+    if (!element) return;
+    element.textContent = message;
+    element.hidden = message === '';
+  }
+
+  function open() {
+    const element = dialog();
+    if (!element || element.open) return;
+    element.showModal();
+    input()?.select();
+    if (!input()?.value) setStatus(MESSAGES.idle);
+    void loadPagefind();
+  }
+
+  function renderResults(results: PagefindResult[]) {
+    list()?.replaceChildren(
+      ...results.map((result) => {
+        const title = document.createElement('span');
+        title.className = 'text-fg block text-[0.9375rem] font-medium';
+        title.textContent = result.meta.title ?? result.url;
+
+        const excerpt = document.createElement('span');
+        excerpt.className =
+          'text-muted mt-1 block text-[0.8125rem] leading-relaxed [&_mark]:bg-accent-soft [&_mark]:text-fg [&_mark]:rounded-xs [&_mark]:px-0.5';
+        // Pagefind가 본문을 이스케이프한 뒤 <mark>만 넣어서 돌려주는 값이다.
+        excerpt.innerHTML = result.excerpt;
+
+        const link = document.createElement('a');
+        link.href = result.url;
+        link.className =
+          'hover:bg-surface focus-visible:bg-surface block rounded-lg px-3 py-2.5 transition-colors';
+        link.append(title, excerpt);
+
+        const item = document.createElement('li');
+        item.append(link);
+        return item;
+      }),
+    );
+  }
+
+  async function search(query: string) {
+    if (!query) {
+      list()?.replaceChildren();
+      setStatus(MESSAGES.idle);
+      return;
+    }
+    const engine = await loadPagefind();
+    if (!engine) {
+      setStatus(MESSAGES.unavailable);
+      return;
+    }
+    const response = await engine.debouncedSearch(query, {}, 150);
+    // 더 최신 입력이 있으면 null이 돌아온다.
+    if (!response) return;
+    const results = await Promise.all(response.results.slice(0, 8).map((result) => result.data()));
+    if (query !== input()?.value.trim()) return;
+    renderResults(results);
+    setStatus(results.length ? '' : MESSAGES.empty(query));
+  }
+
+  function isTyping(target: EventTarget | null): boolean {
+    return (
+      target instanceof HTMLElement &&
+      (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+    );
+  }
+
+  document.addEventListener('click', (event) => {
+    const target = event.target as Element;
+    if (target.closest('[data-search-open]')) open();
+    // 대화상자 바깥(backdrop)을 누르면 닫는다.
+    else if (target === dialog()) dialog()?.close();
+    else if (target.closest('#search-results a')) dialog()?.close();
+  });
+
+  document.addEventListener('input', (event) => {
+    if (event.target === input()) void search(input()!.value.trim());
+  });
+
+  document.addEventListener('keydown', (event) => {
+    const element = dialog();
+    if (!element) return;
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      if (element.open) element.close();
+      else open();
+    } else if (event.key === '/' && !element.open && !isTyping(event.target)) {
+      event.preventDefault();
+      open();
+    } else if (element.open && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      // 위/아래 방향키로 입력창과 결과 사이를 오간다.
+      const stops = [input(), ...(list()?.querySelectorAll<HTMLElement>('a') ?? [])];
+      const current = stops.indexOf(document.activeElement as HTMLElement);
+      const next = stops[current + (event.key === 'ArrowDown' ? 1 : -1)];
+      if (next) {
+        event.preventDefault();
+        next.focus();
+      }
+    }
+  });
+</script>
